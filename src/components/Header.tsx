@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Circle, Download, Radio, Pause, Play, Trash2, Settings } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface HeaderProps {
   isConnected: boolean;
@@ -58,6 +59,8 @@ export const Header = ({ isConnected, isRecording, isPaused, onRecord, onExport,
             <Settings className="w-4 h-4" />
             Settings
           </Button>
+          
+          <ThemeToggle />
           
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-secondary-foreground">
             <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-accent animate-pulse' : 'bg-muted-foreground'}`} />
