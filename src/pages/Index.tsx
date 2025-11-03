@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
+import { StatusBar } from '@/components/StatusBar';
 import { OrientationViewer } from '@/components/OrientationViewer';
 import { SensorChart } from '@/components/SensorChart';
 import { SettingsDialog } from '@/components/SettingsDialog';
 import { BLEConnectionDialog } from '@/components/BLEConnectionDialog';
 import { DataPacketStatus } from '@/components/DataPacketStatus';
 import { useIMUData } from '@/hooks/useIMUData';
-import { toast } from 'sonner';
 
 const Index = () => {
   const [isConnected, setIsConnected] = useState(false);
@@ -24,6 +24,7 @@ const Index = () => {
   const [packetsReceived, setPacketsReceived] = useState(0);
   const [dataRate, setDataRate] = useState(0);
   const [lastPacketTime, setLastPacketTime] = useState('--:--:--');
+  const [statusMessage, setStatusMessage] = useState('');
   
   const { accelerometer, gyroscope, magnetometer, rotation, clearData } = useIMUData({ isPaused });
 
@@ -43,16 +44,12 @@ const Index = () => {
 
   const handleRecord = () => {
     setIsRecording(!isRecording);
-    toast(isRecording ? 'Recording stopped' : 'Recording started', {
-      description: isRecording ? 'Data saved to memory' : 'Capturing IMU data...'
-    });
+    setStatusMessage(isRecording ? 'Recording stopped - Data saved to memory' : 'Recording started - Capturing IMU data...');
   };
   
   const handlePause = () => {
     setIsPaused(!isPaused);
-    toast(isPaused ? 'Data stream resumed' : 'Data stream paused', {
-      description: isPaused ? 'Real-time updates active' : 'Updates suspended'
-    });
+    setStatusMessage(isPaused ? 'Data stream resumed - Real-time updates active' : 'Data stream paused - Updates suspended');
   };
   
   const handleClear = () => {
@@ -60,15 +57,11 @@ const Index = () => {
     setPacketsReceived(0);
     setDataRate(0);
     setLastPacketTime('--:--:--');
-    toast('Data cleared', {
-      description: 'All chart data has been reset'
-    });
+    setStatusMessage('Data cleared - All chart data has been reset');
   };
 
   const handleExport = () => {
-    toast('Export started', {
-      description: 'Preparing CSV file for download...'
-    });
+    setStatusMessage('Export started - Preparing CSV file for download...');
   };
   
   const handleSettings = () => {
@@ -78,9 +71,7 @@ const Index = () => {
   const handleConnectionClick = () => {
     if (isConnected) {
       setIsConnected(false);
-      toast('Disconnected', {
-        description: 'IMU device disconnected'
-      });
+      setStatusMessage('Disconnected - IMU device disconnected');
     } else {
       setBleDialogOpen(true);
     }
@@ -88,16 +79,12 @@ const Index = () => {
   
   const handleBLEConnect = (deviceName: string) => {
     setIsConnected(true);
-    toast('Connected', {
-      description: `Connected to ${deviceName}`
-    });
+    setStatusMessage(`Connected to ${deviceName}`);
   };
   
   const handleIMUChange = (imu: string) => {
     setSelectedIMU(imu);
-    toast('IMU Changed', {
-      description: `Switched to ${imu.toUpperCase()}`
-    });
+    setStatusMessage(`IMU Changed - Switched to ${imu.toUpperCase()}`);
   };
 
   return (
@@ -115,6 +102,8 @@ const Index = () => {
         onSettings={handleSettings}
         onConnectionClick={handleConnectionClick}
       />
+      
+      <StatusBar message={statusMessage} />
       
       <SettingsDialog
         open={settingsOpen}
