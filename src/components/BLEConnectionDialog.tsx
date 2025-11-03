@@ -1,96 +1,147 @@
+import React from "react";
+import { useBLE } from "@/hooks/useBLE";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Bluetooth, Loader2 } from "lucide-react";
-import { useState } from "react";
 
-interface BLEConnectionDialogProps {
+type Props = {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onConnect: (deviceName: string) => void;
-}
+  onOpenChange: (v: boolean) => void;
+  onConnect: (deviceName: string) => void; // your Index.tsx callback
+};
 
-// Mock BLE devices
-const mockDevices = [
-  { id: 1, name: "IMU-BLE-001", rssi: -45 },
-  { id: 2, name: "IMU-BLE-002", rssi: -52 },
-  { id: 3, name: "IMU-BLE-003", rssi: -68 },
-  { id: 4, name: "IMU-BLE-004", rssi: -71 },
-  { id: 5, name: "IMU-BLE-005", rssi: -80 },
-];
+export function BLEConnectionDialog({ open, onOpenChange, onConnect }: Props) {
+  const {
+    devices,
+    hasDevices,
+    isScanning,
+    scanError,
+    connectMessage,
+    connectedDevice,
+    statusText,
+    supports,
+    startScan,
+    stopScan,
+    chooseDevice,
+    connect,
+    disconnect,
+    validUUIDFound,
+    packetsReceived,
+    lastPacketHex,
+  } = useBLE();
 
-export const BLEConnectionDialog = ({ open, onOpenChange, onConnect }: BLEConnectionDialogProps) => {
-  const [scanning, setScanning] = useState(false);
-  const [devices, setDevices] = useState(mockDevices);
-
-  const handleScan = () => {
-    setScanning(true);
-    setTimeout(() => {
-      setDevices(mockDevices);
-      setScanning(false);
-    }, 1500);
+  const handleChoose = async () => {
+    const device = await chooseDevice();
+    if (device) {
+      const ok = await connect(device);
+      if (ok && validUUIDFound) {
+        onConnect(device.name ?? "Unknown");
+        onOpenChange(false); // close only after UUIDs valid
+      }
+    }
   };
 
-  const handleConnect = (deviceName: string) => {
-    onConnect(deviceName);
-    onOpenChange(false);
+  const handleConnectFromList = async (id: string) => {
+    const d = devices.find(x => x.id === id)?.device;
+    if (d) {
+      const ok = await connect(d);
+      if (ok && validUUIDFound) {
+        onConnect(d.name ?? "Unknown");
+        onOpenChange(false);
+      }
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+    <Dialog open={open} onOpenChange={(v) => {
+      if (!v && connectedDevice) disconnect();
+      onOpenChange(v);
+    }}>
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Available BLE Devices</DialogTitle>
+          <DialogTitle>Connect to a BLE Device</DialogTitle>
           <DialogDescription>
-            Select an IMU device to connect
+            The app will validate the service and characteristic and start notifications.
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="space-y-3 py-4">
-          <Button 
-            onClick={handleScan} 
-            disabled={scanning}
-            className="w-full gap-2"
-            variant="outline"
-          >
-            {scanning ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Scanning...
-              </>
-            ) : (
-              <>
-                <Bluetooth className="w-4 h-4" />
-                Scan for Devices
-              </>
-            )}
-          </Button>
 
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
-            {devices.map((device) => (
-              <Button
-                key={device.id}
-                variant="outline"
-                className="w-full justify-between"
-                onClick={() => handleConnect(device.name)}
-              >
-                <div className="flex items-center gap-2">
-                  <Bluetooth className="w-4 h-4" />
-                  <span>{device.name}</span>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  {device.rssi} dBm
-                </span>
-              </Button>
-            ))}
+        {!supports.webBluetooth && (
+          <p className="text-sm text-red-600">
+            This browser does not support Web Bluetooth. Try Chrome or Edge over HTTPS (or localhost).
+          </p>
+        )}
+
+        {scanError && <p className="text-sm text-red-600">{scanError}</p>}
+        {connectMessage && <p className="text-sm text-muted-foreground">{connectMessage}</p>}
+        {statusText && !scanError && (
+          <p className="text-xs text-muted-foreground">{statusText}</p>
+        )}
+
+        {/* Packets section (only when notifications are active) */}
+        {validUUIDFound && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            <div><strong>Packets received:</strong> {packetsReceived}</div>
+            {lastPacketHex && <div className="mt-1 break-all"><strong>Last packet (hex):</strong> {lastPacketHex}</div>}
           </div>
+        )}
+
+        <div className="flex gap-2 mt-3">
+          {supports.scanning && (
+            isScanning ? (
+              <Button variant="secondary" onClick={stopScan}>Stop scan</Button>
+            ) : (
+              <Button onClick={startScan}>Scan nearby</Button>
+            )
+          )}
+          {supports.webBluetooth && (
+            <Button variant="outline" onClick={handleChoose}>Choose device</Button>
+          )}
+          {connectedDevice && (
+            <Button variant="ghost" onClick={disconnect}>Disconnect</Button>
+          )}
         </div>
+
+        <div className="mt-4 max-h-64 overflow-auto border rounded">
+          {!hasDevices ? (
+            <div className="p-3 text-sm text-muted-foreground">
+              No devices yet. Click <strong>Scan nearby</strong> or <strong>Choose device</strong>.
+            </div>
+          ) : (
+            <ul className="divide-y">
+              {devices.map(d => (
+                <li key={d.id} className="p-3 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium">
+                      {d.name} <span className="text-xs text-muted-foreground">({d.id})</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1 space-x-3">
+                      {typeof d.rssi === "number" && <span>RSSI: {d.rssi} dBm</span>}
+                      {typeof d.txPower === "number" && <span>Tx: {d.txPower} dBm</span>}
+                      {d.uuids?.length ? <span>UUIDs: {d.uuids.join(", ")}</span> : null}
+                      <span>Last seen: {new Date(d.lastSeen).toLocaleTimeString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={() => handleConnectFromList(d.id)}>
+                      Connect
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-};
+}
