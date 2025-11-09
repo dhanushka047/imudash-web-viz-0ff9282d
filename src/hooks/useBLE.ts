@@ -74,6 +74,11 @@ export function useBLE() {
   const [validUUIDFound, setValidUUIDFound] = useState(false);
   const [packetsReceived, setPacketsReceived] = useState(0);
   const [lastPacketHex, setLastPacketHex] = useState<string | null>(null);
+  const [latestIMUData, setLatestIMUData] = useState<{
+    accel: { x: number; y: number; z: number };
+    gyro: { x: number; y: number; z: number };
+    mag: { x: number; y: number; z: number };
+  } | null>(null);
 
   const advHandlerRef = useRef<(ev: any) => void>();
   const leScanRef = useRef<BluetoothLEScan | null>(null);
@@ -202,7 +207,23 @@ const chooseDevice = useCallback(async () => {
     const ch = ev.target as BluetoothRemoteGATTCharacteristic;
     const dv = ch?.value;
     if (!dv) return;
-    // Convert to hex preview (first up to 16 bytes)
+    
+    // Convert to string and parse CSV format
+    const decoder = new TextDecoder();
+    const text = decoder.decode(dv.buffer);
+    
+    // Parse CSV: 0,accel.x,accel.y,accel.z,gyro.x,gyro.y,gyro.z,mag.x,mag.y,mag.z
+    const values = text.trim().split(',').map(v => parseFloat(v));
+    
+    if (values.length >= 10) {
+      setLatestIMUData({
+        accel: { x: values[1], y: values[2], z: values[3] },
+        gyro: { x: values[4], y: values[5], z: values[6] },
+        mag: { x: values[7], y: values[8], z: values[9] }
+      });
+    }
+    
+    // Keep hex preview for debugging
     const bytes = Array.from(new Uint8Array(dv.buffer));
     const hex = bytes.slice(0, 16).map(b => b.toString(16).padStart(2, "0")).join(" ");
     setLastPacketHex(hex);
@@ -298,6 +319,7 @@ const chooseDevice = useCallback(async () => {
     validUUIDFound,
     packetsReceived,
     lastPacketHex,
+    latestIMUData,
 
     // actions
     startScan,

@@ -147,11 +147,11 @@ const Index = () => {
             <OrientationViewer rotation={rotation} />
           </div>
           
-          {/* Sensor Charts Grid */}
+          {/* Sensor Charts Grid - 4 graphs: Accel, Gyro, Mag, Fusion */}
           <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr min-h-0 overflow-auto">
             <div className="min-h-[250px]">
               <SensorChart
-                title="Accelerometer"
+                title={`Accelerometer (${selectedIMU.toUpperCase()})`}
                 data={accelerometer}
                 unit="m/s²"
                 color1="hsl(var(--chart-1))"
@@ -162,7 +162,7 @@ const Index = () => {
             
             <div className="min-h-[250px]">
               <SensorChart
-                title="Gyroscope"
+                title={`Gyroscope (${selectedIMU.toUpperCase()})`}
                 data={gyroscope}
                 unit="rad/s"
                 color1="hsl(var(--chart-4))"
@@ -173,7 +173,7 @@ const Index = () => {
             
             <div className="min-h-[250px]">
               <SensorChart
-                title="Magnetometer"
+                title={`Magnetometer (${selectedIMU.toUpperCase()})`}
                 data={magnetometer}
                 unit="µT"
                 color1="hsl(var(--chart-1))"
@@ -184,7 +184,7 @@ const Index = () => {
             
             <div className="min-h-[250px]">
               <SensorChart
-                title="Orientation (Euler)"
+                title="Sensor Fusion (Orientation)"
                 data={accelerometer.map((_, i) => ({
                   time: accelerometer[i]?.time || 0,
                   x: rotation.x % (2 * Math.PI),
@@ -192,33 +192,6 @@ const Index = () => {
                   z: rotation.z % (2 * Math.PI)
                 }))}
                 unit="rad"
-                color1="hsl(var(--chart-4))"
-                color2="hsl(var(--chart-5))"
-                color3="hsl(var(--chart-6))"
-              />
-            </div>
-            
-            <div className="min-h-[250px]">
-              <SensorChart
-                title="Linear Acceleration"
-                data={accelerometer.map(d => ({
-                  time: d.time,
-                  x: d.x,
-                  y: d.y,
-                  z: d.z - 9.8
-                }))}
-                unit="m/s²"
-                color1="hsl(var(--chart-1))"
-                color2="hsl(var(--chart-2))"
-                color3="hsl(var(--chart-3))"
-              />
-            </div>
-            
-            <div className="min-h-[250px]">
-              <SensorChart
-                title="Angular Velocity"
-                data={gyroscope}
-                unit="°/s"
                 color1="hsl(var(--chart-4))"
                 color2="hsl(var(--chart-5))"
                 color3="hsl(var(--chart-6))"
