@@ -1,20 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Circle, Download, Radio, Pause, Play, Trash2, Settings } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 interface HeaderProps {
   isConnected: boolean;
   isRecording: boolean;
   isPaused: boolean;
-  selectedIMU: string;
-  onIMUChange: (imu: string) => void;
+  selectedIMUs: number[];
+  onIMUToggle: (imu: number) => void;
   onRecord: () => void;
   onExport: () => void;
   onPause: () => void;
@@ -23,7 +18,7 @@ interface HeaderProps {
   onConnectionClick: () => void;
 }
 
-export const Header = ({ isConnected, isRecording, isPaused, selectedIMU, onIMUChange, onRecord, onExport, onPause, onClear, onSettings, onConnectionClick }: HeaderProps) => {
+export const Header = ({ isConnected, isRecording, isPaused, selectedIMUs, onIMUToggle, onRecord, onExport, onPause, onClear, onSettings, onConnectionClick }: HeaderProps) => {
   return (
     <header className="border-b border-border bg-card px-6 py-4">
       <div className="flex items-center justify-between">
@@ -33,19 +28,23 @@ export const Header = ({ isConnected, isRecording, isPaused, selectedIMU, onIMUC
           </div>
           <h1 className="text-xl font-bold text-foreground">IMU Monitor</h1>
           
-          <Select value={selectedIMU} onValueChange={onIMUChange}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Select IMU" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="imu1">IMU 1</SelectItem>
-              <SelectItem value="imu2">IMU 2</SelectItem>
-              <SelectItem value="imu3">IMU 3</SelectItem>
-              <SelectItem value="imu4">IMU 4</SelectItem>
-              <SelectItem value="imu5">IMU 5</SelectItem>
-              <SelectItem value="imu6">IMU 6</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-4 ml-4">
+            {[1, 2, 3].map((imu) => (
+              <div key={imu} className="flex items-center gap-2">
+                <Checkbox
+                  id={`imu-${imu}`}
+                  checked={selectedIMUs.includes(imu)}
+                  onCheckedChange={() => onIMUToggle(imu)}
+                />
+                <Label
+                  htmlFor={`imu-${imu}`}
+                  className="text-sm font-medium cursor-pointer"
+                >
+                  IMU {imu}
+                </Label>
+              </div>
+            ))}
+          </div>
         </div>
         
         <div className="flex items-center gap-3">

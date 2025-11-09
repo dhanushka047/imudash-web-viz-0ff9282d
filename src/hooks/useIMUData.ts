@@ -7,8 +7,16 @@ interface IMUData {
   z: number;
 }
 
+interface IMUSensorData {
+  accelerometer: IMUData[];
+  gyroscope: IMUData[];
+  magnetometer: IMUData[];
+  rotation: { x: number; y: number; z: number };
+}
+
 interface UseIMUDataProps {
   isPaused: boolean;
+  selectedIMUs: number[];
   onClear?: () => void;
 }
 
@@ -19,86 +27,88 @@ const generateSmoothValue = (prev: number, range: number, smoothness: number = 0
   return prev + (target - prev) * smoothness;
 };
 
-export const useIMUData = ({ isPaused }: UseIMUDataProps) => {
-  const [accelerometer, setAccelerometer] = useState<IMUData[]>([]);
-  const [gyroscope, setGyroscope] = useState<IMUData[]>([]);
-  const [magnetometer, setMagnetometer] = useState<IMUData[]>([]);
-  const [rotation, setRotation] = useState({ x: 0, y: 0, z: 0 });
+export const useIMUData = ({ isPaused, selectedIMUs }: UseIMUDataProps) => {
+  const [imuData, setImuData] = useState<Record<number, IMUSensorData>>({
+    1: { accelerometer: [], gyroscope: [], magnetometer: [], rotation: { x: 0, y: 0, z: 0 } },
+    2: { accelerometer: [], gyroscope: [], magnetometer: [], rotation: { x: 0, y: 0, z: 0 } },
+    3: { accelerometer: [], gyroscope: [], magnetometer: [], rotation: { x: 0, y: 0, z: 0 } }
+  });
   
   const timeRef = useRef(0);
-  const prevAccel = useRef({ x: 0, y: 0, z: 9.8 });
-  const prevGyro = useRef({ x: 0, y: 0, z: 0 });
-  const prevMag = useRef({ x: 25, y: 0, z: 40 });
+  const prevData = useRef({
+    1: { accel: { x: 0, y: 0, z: 9.8 }, gyro: { x: 0, y: 0, z: 0 }, mag: { x: 25, y: 0, z: 40 } },
+    2: { accel: { x: 0, y: 0, z: 9.8 }, gyro: { x: 0, y: 0, z: 0 }, mag: { x: 25, y: 0, z: 40 } },
+    3: { accel: { x: 0, y: 0, z: 9.8 }, gyro: { x: 0, y: 0, z: 0 }, mag: { x: 25, y: 0, z: 40 } }
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (isPaused) return;
+      if (isPaused || selectedIMUs.length === 0) return;
       
       timeRef.current += 0.1;
       
-      // Generate smooth accelerometer data (includes gravity)
-      prevAccel.current = {
-        x: generateSmoothValue(prevAccel.current.x, 0.5),
-        y: generateSmoothValue(prevAccel.current.y, 0.5),
-        z: generateSmoothValue(prevAccel.current.z, 0.3) + 9.8
-      };
-      
-      // Generate smooth gyroscope data (angular velocity)
-      prevGyro.current = {
-        x: generateSmoothValue(prevGyro.current.x, 0.2),
-        y: generateSmoothValue(prevGyro.current.y, 0.2),
-        z: generateSmoothValue(prevGyro.current.z, 0.2)
-      };
-      
-      // Generate smooth magnetometer data
-      prevMag.current = {
-        x: generateSmoothValue(prevMag.current.x, 2),
-        y: generateSmoothValue(prevMag.current.y, 2),
-        z: generateSmoothValue(prevMag.current.z, 2)
-      };
+      setImuData(prev => {
+        const newData = { ...prev };
+        
+        selectedIMUs.forEach(imuIndex => {
+          const prevImu = prevData.current[imuIndex];
+          
+          // Generate smooth data for this IMU
+          prevImu.accel = {
+            x: generateSmoothValue(prevImu.accel.x, 0.5),
+            y: generateSmoothValue(prevImu.accel.y, 0.5),
+            z: generateSmoothValue(prevImu.accel.z, 0.3) + 9.8
+          };
+          
+          prevImu.gyro = {
+            x: generateSmoothValue(prevImu.gyro.x, 0.2),
+            y: generateSmoothValue(prevImu.gyro.y, 0.2),
+            z: generateSmoothValue(prevImu.gyro.z, 0.2)
+          };
+          
+          prevImu.mag = {
+            x: generateSmoothValue(prevImu.mag.x, 2),
+            y: generateSmoothValue(prevImu.mag.y, 2),
+            z: generateSmoothValue(prevImu.mag.z, 2)
+          };
 
-      // Update rotation for 3D model
-      setRotation(prev => ({
-        x: prev.x + prevGyro.current.x * 0.01,
-        y: prev.y + prevGyro.current.y * 0.01,
-        z: prev.z + prevGyro.current.z * 0.01
-      }));
+          // Update rotation
+          const newRotation = {
+            x: newData[imuIndex].rotation.x + prevImu.gyro.x * 0.01,
+            y: newData[imuIndex].rotation.y + prevImu.gyro.y * 0.01,
+            z: newData[imuIndex].rotation.z + prevImu.gyro.z * 0.01
+          };
 
-      // Update data arrays
-      const updateData = (setData: React.Dispatch<React.SetStateAction<IMUData[]>>, values: { x: number; y: number; z: number }) => {
-        setData(prev => {
-          const newData = [
-            ...prev,
-            {
-              time: parseFloat(timeRef.current.toFixed(1)),
-              ...values
-            }
-          ].slice(-MAX_DATA_POINTS);
-          return newData;
+          // Update data arrays
+          const timePoint = parseFloat(timeRef.current.toFixed(1));
+          
+          newData[imuIndex] = {
+            accelerometer: [...newData[imuIndex].accelerometer, { time: timePoint, ...prevImu.accel }].slice(-MAX_DATA_POINTS),
+            gyroscope: [...newData[imuIndex].gyroscope, { time: timePoint, ...prevImu.gyro }].slice(-MAX_DATA_POINTS),
+            magnetometer: [...newData[imuIndex].magnetometer, { time: timePoint, ...prevImu.mag }].slice(-MAX_DATA_POINTS),
+            rotation: newRotation
+          };
         });
-      };
-
-      updateData(setAccelerometer, prevAccel.current);
-      updateData(setGyroscope, prevGyro.current);
-      updateData(setMagnetometer, prevMag.current);
+        
+        return newData;
+      });
       
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isPaused]);
+  }, [isPaused, selectedIMUs]);
   
   const clearData = () => {
-    setAccelerometer([]);
-    setGyroscope([]);
-    setMagnetometer([]);
+    setImuData({
+      1: { accelerometer: [], gyroscope: [], magnetometer: [], rotation: { x: 0, y: 0, z: 0 } },
+      2: { accelerometer: [], gyroscope: [], magnetometer: [], rotation: { x: 0, y: 0, z: 0 } },
+      3: { accelerometer: [], gyroscope: [], magnetometer: [], rotation: { x: 0, y: 0, z: 0 } }
+    });
     timeRef.current = 0;
   };
 
   return {
-    accelerometer,
-    gyroscope,
-    magnetometer,
-    rotation,
+    imuData,
     clearData
   };
 };
