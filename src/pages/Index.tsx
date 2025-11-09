@@ -14,7 +14,7 @@ const Index = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bleDialogOpen, setBleDialogOpen] = useState(false);
-  const [selectedIMUs, setSelectedIMUs] = useState<number[]>([1]);
+  const [selectedIMU, setSelectedIMU] = useState('imu1');
   const [settings, setSettings] = useState({
     samplingRate: 100,
     chartDuration: 5,
@@ -26,7 +26,7 @@ const Index = () => {
   const [lastPacketTime, setLastPacketTime] = useState('--:--:--');
   const [statusMessage, setStatusMessage] = useState('');
   
-  const { imuData, clearData } = useIMUData({ isPaused, selectedIMUs });
+  const { accelerometer, gyroscope, magnetometer, rotation, clearData } = useIMUData({ isPaused });
 
   // Simulate packet reception tracking
   useEffect(() => {
@@ -82,17 +82,9 @@ const Index = () => {
     setStatusMessage(`Connected to ${deviceName}`);
   };
   
-  const handleIMUToggle = (imu: number) => {
-    setSelectedIMUs(prev => {
-      if (prev.includes(imu)) {
-        const newSelection = prev.filter(i => i !== imu);
-        setStatusMessage(newSelection.length === 0 ? 'All IMUs deselected' : `IMU ${imu} deselected`);
-        return newSelection;
-      } else {
-        setStatusMessage(`IMU ${imu} selected`);
-        return [...prev, imu].sort();
-      }
-    });
+  const handleIMUChange = (imu: string) => {
+    setSelectedIMU(imu);
+    setStatusMessage(`IMU Changed - Switched to ${imu.toUpperCase()}`);
   };
 
   return (
@@ -101,8 +93,8 @@ const Index = () => {
         isConnected={isConnected}
         isRecording={isRecording}
         isPaused={isPaused}
-        selectedIMUs={selectedIMUs}
-        onIMUToggle={handleIMUToggle}
+        selectedIMU={selectedIMU}
+        onIMUChange={handleIMUChange}
         onRecord={handleRecord}
         onExport={handleExport}
         onPause={handlePause}
@@ -126,7 +118,7 @@ const Index = () => {
         onConnect={handleBLEConnect}
       />
       
-      {isConnected && selectedIMUs.length > 0 && (
+      {isConnected && (
         <div className="px-6 pt-4">
           <DataPacketStatus
             packetsReceived={packetsReceived}
@@ -134,14 +126,14 @@ const Index = () => {
             lastPacketTime={lastPacketTime}
             latestData={{
               accel: {
-                x: imuData[selectedIMUs[0]]?.accelerometer[imuData[selectedIMUs[0]].accelerometer.length - 1]?.x || 0,
-                y: imuData[selectedIMUs[0]]?.accelerometer[imuData[selectedIMUs[0]].accelerometer.length - 1]?.y || 0,
-                z: imuData[selectedIMUs[0]]?.accelerometer[imuData[selectedIMUs[0]].accelerometer.length - 1]?.z || 0
+                x: accelerometer[accelerometer.length - 1]?.x || 0,
+                y: accelerometer[accelerometer.length - 1]?.y || 0,
+                z: accelerometer[accelerometer.length - 1]?.z || 0
               },
               gyro: {
-                x: imuData[selectedIMUs[0]]?.gyroscope[imuData[selectedIMUs[0]].gyroscope.length - 1]?.x || 0,
-                y: imuData[selectedIMUs[0]]?.gyroscope[imuData[selectedIMUs[0]].gyroscope.length - 1]?.y || 0,
-                z: imuData[selectedIMUs[0]]?.gyroscope[imuData[selectedIMUs[0]].gyroscope.length - 1]?.z || 0
+                x: gyroscope[gyroscope.length - 1]?.x || 0,
+                y: gyroscope[gyroscope.length - 1]?.y || 0,
+                z: gyroscope[gyroscope.length - 1]?.z || 0
               }
             }}
           />
@@ -149,74 +141,63 @@ const Index = () => {
       )}
       
       <main className="flex-1 p-6 overflow-hidden min-h-0">
-        <div className="flex flex-col gap-6 h-full">
-          {/* 3D Orientation Viewers */}
-          {selectedIMUs.length > 0 && (
-            <div className={`grid gap-4 ${selectedIMUs.length === 1 ? 'grid-cols-1' : selectedIMUs.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-              {selectedIMUs.map(imuIndex => (
-                <div key={imuIndex} className="min-h-[300px]">
-                  <OrientationViewer 
-                    rotation={imuData[imuIndex]?.rotation || { x: 0, y: 0, z: 0 }} 
-                  />
-                  <p className="text-center text-sm text-muted-foreground mt-2">IMU {imuIndex}</p>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+          {/* 3D Orientation Viewer */}
+          <div className="lg:col-span-1 min-h-0">
+            <OrientationViewer rotation={rotation} />
+          </div>
           
-          {/* Sensor Charts Grid - 4 graphs for first selected IMU */}
-          {selectedIMUs.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr min-h-0 overflow-auto flex-1">
-              <div className="min-h-[250px]">
-                <SensorChart
-                  title={`Accelerometer (IMU ${selectedIMUs[0]})`}
-                  data={imuData[selectedIMUs[0]]?.accelerometer || []}
-                  unit="m/s²"
-                  color1="hsl(var(--chart-1))"
-                  color2="hsl(var(--chart-2))"
-                  color3="hsl(var(--chart-3))"
-                />
-              </div>
-              
-              <div className="min-h-[250px]">
-                <SensorChart
-                  title={`Gyroscope (IMU ${selectedIMUs[0]})`}
-                  data={imuData[selectedIMUs[0]]?.gyroscope || []}
-                  unit="rad/s"
-                  color1="hsl(var(--chart-4))"
-                  color2="hsl(var(--chart-5))"
-                  color3="hsl(var(--chart-6))"
-                />
-              </div>
-              
-              <div className="min-h-[250px]">
-                <SensorChart
-                  title={`Magnetometer (IMU ${selectedIMUs[0]})`}
-                  data={imuData[selectedIMUs[0]]?.magnetometer || []}
-                  unit="µT"
-                  color1="hsl(var(--chart-1))"
-                  color2="hsl(var(--chart-2))"
-                  color3="hsl(var(--chart-3))"
-                />
-              </div>
-              
-              <div className="min-h-[250px]">
-                <SensorChart
-                  title="Sensor Fusion (Orientation)"
-                  data={(imuData[selectedIMUs[0]]?.accelerometer || []).map((_, i) => ({
-                    time: imuData[selectedIMUs[0]]?.accelerometer[i]?.time || 0,
-                    x: (imuData[selectedIMUs[0]]?.rotation.x || 0) % (2 * Math.PI),
-                    y: (imuData[selectedIMUs[0]]?.rotation.y || 0) % (2 * Math.PI),
-                    z: (imuData[selectedIMUs[0]]?.rotation.z || 0) % (2 * Math.PI)
-                  }))}
-                  unit="rad"
-                  color1="hsl(var(--chart-4))"
-                  color2="hsl(var(--chart-5))"
-                  color3="hsl(var(--chart-6))"
-                />
-              </div>
+          {/* Sensor Charts Grid - 4 graphs: Accel, Gyro, Mag, Fusion */}
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr min-h-0 overflow-auto">
+            <div className="min-h-[250px]">
+              <SensorChart
+                title={`Accelerometer (${selectedIMU.toUpperCase()})`}
+                data={accelerometer}
+                unit="m/s²"
+                color1="hsl(var(--chart-1))"
+                color2="hsl(var(--chart-2))"
+                color3="hsl(var(--chart-3))"
+              />
             </div>
-          )}
+            
+            <div className="min-h-[250px]">
+              <SensorChart
+                title={`Gyroscope (${selectedIMU.toUpperCase()})`}
+                data={gyroscope}
+                unit="rad/s"
+                color1="hsl(var(--chart-4))"
+                color2="hsl(var(--chart-5))"
+                color3="hsl(var(--chart-6))"
+              />
+            </div>
+            
+            <div className="min-h-[250px]">
+              <SensorChart
+                title={`Magnetometer (${selectedIMU.toUpperCase()})`}
+                data={magnetometer}
+                unit="µT"
+                color1="hsl(var(--chart-1))"
+                color2="hsl(var(--chart-2))"
+                color3="hsl(var(--chart-3))"
+              />
+            </div>
+            
+            <div className="min-h-[250px]">
+              <SensorChart
+                title="Sensor Fusion (Orientation)"
+                data={accelerometer.map((_, i) => ({
+                  time: accelerometer[i]?.time || 0,
+                  x: rotation.x % (2 * Math.PI),
+                  y: rotation.y % (2 * Math.PI),
+                  z: rotation.z % (2 * Math.PI)
+                }))}
+                unit="rad"
+                color1="hsl(var(--chart-4))"
+                color2="hsl(var(--chart-5))"
+                color3="hsl(var(--chart-6))"
+              />
+            </div>
+          </div>
         </div>
       </main>
     </div>
