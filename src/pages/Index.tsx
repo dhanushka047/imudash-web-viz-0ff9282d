@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Header } from '@/components/Header';
 import { StatusBar } from '@/components/StatusBar';
 import { OrientationViewer } from '@/components/OrientationViewer';
@@ -7,6 +7,7 @@ import { SettingsDialog } from '@/components/SettingsDialog';
 import { BLEConnectionDialog } from '@/components/BLEConnectionDialog';
 import { DataPacketStatus } from '@/components/DataPacketStatus';
 import { useIMUData } from '@/hooks/useIMUData';
+import { useBLE } from '@/hooks/useBLE';
 
 const Index = () => {
   const [isConnected, setIsConnected] = useState(false);
@@ -21,26 +22,42 @@ const Index = () => {
     devicePort: '/dev/ttyUSB0',
     baudRate: 115200
   });
-  const [packetsReceived, setPacketsReceived] = useState(0);
-  const [dataRate, setDataRate] = useState(0);
-  const [lastPacketTime, setLastPacketTime] = useState('--:--:--');
   const [statusMessage, setStatusMessage] = useState('');
   
   const { accelerometer, gyroscope, magnetometer, rotation, clearData } = useIMUData({ isPaused });
+  const bleHook = useBLE();
+  
+  // Track BLE data for charts
+  const [bleAccelData, setBleAccelData] = useState<Array<{ time: number; x: number; y: number; z: number }>>([]);
+  const [bleGyroData, setBleGyroData] = useState<Array<{ time: number; x: number; y: number; z: number }>>([]);
+  const [bleMagData, setBleMagData] = useState<Array<{ time: number; x: number; y: number; z: number }>>([]);
+  const startTimeRef = useRef<number>(Date.now());
 
-  // Simulate packet reception tracking
+  // Update BLE data when new IMU data arrives
   useEffect(() => {
-    if (!isPaused && isConnected) {
-      const interval = setInterval(() => {
-        setPacketsReceived(prev => prev + 1);
-        setDataRate(settings.samplingRate);
-        const now = new Date();
-        setLastPacketTime(now.toLocaleTimeString());
-      }, 1000 / settings.samplingRate);
+    if (bleHook.latestIMUData && !isPaused && isConnected) {
+      const currentTime = (Date.now() - startTimeRef.current) / 1000;
+      const maxDataPoints = settings.samplingRate * settings.chartDuration;
       
-      return () => clearInterval(interval);
+      // Update accelerometer data
+      setBleAccelData(prev => {
+        const newData = [...prev, { time: currentTime, ...bleHook.latestIMUData!.accel }];
+        return newData.slice(-maxDataPoints);
+      });
+      
+      // Update gyroscope data
+      setBleGyroData(prev => {
+        const newData = [...prev, { time: currentTime, ...bleHook.latestIMUData!.gyro }];
+        return newData.slice(-maxDataPoints);
+      });
+      
+      // Update magnetometer data
+      setBleMagData(prev => {
+        const newData = [...prev, { time: currentTime, ...bleHook.latestIMUData!.mag }];
+        return newData.slice(-maxDataPoints);
+      });
     }
-  }, [isPaused, isConnected, settings.samplingRate]);
+  }, [bleHook.latestIMUData, isPaused, isConnected, settings.samplingRate, settings.chartDuration]);
 
   const handleRecord = () => {
     setIsRecording(!isRecording);
@@ -54,9 +71,10 @@ const Index = () => {
   
   const handleClear = () => {
     clearData();
-    setPacketsReceived(0);
-    setDataRate(0);
-    setLastPacketTime('--:--:--');
+    setBleAccelData([]);
+    setBleGyroData([]);
+    setBleMagData([]);
+    startTimeRef.current = Date.now();
     setStatusMessage('Data cleared - All chart data has been reset');
   };
 
@@ -70,16 +88,31 @@ const Index = () => {
   
   const handleConnectionClick = () => {
     if (isConnected) {
+      bleHook.disconnect();
       setIsConnected(false);
+      setBleAccelData([]);
+      setBleGyroData([]);
+      setBleMagData([]);
+      startTimeRef.current = Date.now();
       setStatusMessage('Disconnected - IMU device disconnected');
     } else {
       setBleDialogOpen(true);
     }
   };
   
-  const handleBLEConnect = (deviceName: string) => {
-    setIsConnected(true);
-    setStatusMessage(`Connected to ${deviceName}`);
+  const handleBLEConnect = async (deviceName: string) => {
+    const device = bleHook.devices.find(d => d.name === deviceName)?.device;
+    if (device) {
+      const connected = await bleHook.connect(device);
+      if (connected) {
+        setIsConnected(true);
+        setBleAccelData([]);
+        setBleGyroData([]);
+        setBleMagData([]);
+        startTimeRef.current = Date.now();
+        setStatusMessage(`Connected to ${deviceName}`);
+      }
+    }
   };
   
   const handleIMUChange = (imu: string) => {
@@ -118,23 +151,15 @@ const Index = () => {
         onConnect={handleBLEConnect}
       />
       
-      {isConnected && (
+      {isConnected && bleHook.latestIMUData && (
         <div className="px-6 pt-4">
           <DataPacketStatus
-            packetsReceived={packetsReceived}
-            dataRate={dataRate}
-            lastPacketTime={lastPacketTime}
+            packetsReceived={bleHook.packetsReceived}
+            dataRate={settings.samplingRate}
+            lastPacketTime={new Date().toLocaleTimeString()}
             latestData={{
-              accel: {
-                x: accelerometer[accelerometer.length - 1]?.x || 0,
-                y: accelerometer[accelerometer.length - 1]?.y || 0,
-                z: accelerometer[accelerometer.length - 1]?.z || 0
-              },
-              gyro: {
-                x: gyroscope[gyroscope.length - 1]?.x || 0,
-                y: gyroscope[gyroscope.length - 1]?.y || 0,
-                z: gyroscope[gyroscope.length - 1]?.z || 0
-              }
+              accel: bleHook.latestIMUData.accel,
+              gyro: bleHook.latestIMUData.gyro
             }}
           />
         </div>
@@ -144,7 +169,11 @@ const Index = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* 3D Orientation Viewer */}
           <div className="lg:col-span-1 min-h-0">
-            <OrientationViewer rotation={rotation} />
+            <OrientationViewer rotation={isConnected && bleAccelData.length > 0 ? {
+              x: bleGyroData[bleGyroData.length - 1]?.x || 0,
+              y: bleGyroData[bleGyroData.length - 1]?.y || 0,
+              z: bleGyroData[bleGyroData.length - 1]?.z || 0
+            } : rotation} />
           </div>
           
           {/* Sensor Charts Grid - 4 graphs: Accel, Gyro, Mag, Fusion */}
@@ -152,7 +181,7 @@ const Index = () => {
             <div className="min-h-[250px]">
               <SensorChart
                 title={`Accelerometer (${selectedIMU.toUpperCase()})`}
-                data={accelerometer}
+                data={isConnected ? bleAccelData : accelerometer}
                 unit="m/s²"
                 color1="hsl(var(--chart-1))"
                 color2="hsl(var(--chart-2))"
@@ -163,7 +192,7 @@ const Index = () => {
             <div className="min-h-[250px]">
               <SensorChart
                 title={`Gyroscope (${selectedIMU.toUpperCase()})`}
-                data={gyroscope}
+                data={isConnected ? bleGyroData : gyroscope}
                 unit="rad/s"
                 color1="hsl(var(--chart-4))"
                 color2="hsl(var(--chart-5))"
@@ -174,7 +203,7 @@ const Index = () => {
             <div className="min-h-[250px]">
               <SensorChart
                 title={`Magnetometer (${selectedIMU.toUpperCase()})`}
-                data={magnetometer}
+                data={isConnected ? bleMagData : magnetometer}
                 unit="µT"
                 color1="hsl(var(--chart-1))"
                 color2="hsl(var(--chart-2))"
@@ -185,7 +214,12 @@ const Index = () => {
             <div className="min-h-[250px]">
               <SensorChart
                 title="Sensor Fusion (Orientation)"
-                data={accelerometer.map((_, i) => ({
+                data={isConnected ? bleGyroData.map((g, i) => ({
+                  time: g.time,
+                  x: g.x % (2 * Math.PI),
+                  y: g.y % (2 * Math.PI),
+                  z: g.z % (2 * Math.PI)
+                })) : accelerometer.map((_, i) => ({
                   time: accelerometer[i]?.time || 0,
                   x: rotation.x % (2 * Math.PI),
                   y: rotation.y % (2 * Math.PI),
