@@ -24,7 +24,7 @@ const Index = () => {
   });
   const [statusMessage, setStatusMessage] = useState('');
   
-  const { accelerometer, gyroscope, magnetometer, rotation, clearData } = useIMUData({ isPaused });
+  const { accelerometer, gyroscope, magnetometer, rotation, clearData } = useIMUData({ isPaused: !isConnected || isPaused });
   const bleHook = useBLE();
   
   // Track BLE data for charts
@@ -187,78 +187,79 @@ const Index = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* 3D Orientation Viewer */}
           <div className="lg:col-span-1 min-h-0">
-            <OrientationViewer rotation={isConnected && bleAccelData.length > 0 ? {
-              x: bleGyroData[bleGyroData.length - 1]?.x || 0,
-              y: bleGyroData[bleGyroData.length - 1]?.y || 0,
-              z: bleGyroData[bleGyroData.length - 1]?.z || 0
-            } : rotation} />
+            {isConnected && bleGyroData.length > 0 ? (
+              <OrientationViewer rotation={{
+                x: bleGyroData[bleGyroData.length - 1]?.x || 0,
+                y: bleGyroData[bleGyroData.length - 1]?.y || 0,
+                z: bleGyroData[bleGyroData.length - 1]?.z || 0
+              }} />
+            ) : (
+              <div className="bg-card rounded-lg border border-border h-full flex items-center justify-center">
+                <div className="text-center">
+                  <p className="text-muted-foreground">3D Orientation</p>
+                  <p className="text-muted-foreground/60 text-sm mt-2">Connect device to view</p>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Sensor Charts Grid - 4 graphs: Accel, Gyro, Mag, Fusion */}
           <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-fr min-h-0 overflow-auto">
-            <div className="min-h-[250px]">
-              <SensorChart
-                title={`Accelerometer (${selectedIMU.toUpperCase()})`}
-                data={isConnected ? bleAccelData : accelerometer}
-                unit="m/s²"
-                color1="hsl(var(--chart-1))"
-                color2="hsl(var(--chart-2))"
-                color3="hsl(var(--chart-3))"
-              />
-            </div>
-            
-            <div className="min-h-[250px]">
-              <SensorChart
-                title={`Gyroscope (${selectedIMU.toUpperCase()})`}
-                data={isConnected ? bleGyroData : gyroscope}
-                unit="rad/s"
-                color1="hsl(var(--chart-4))"
-                color2="hsl(var(--chart-5))"
-                color3="hsl(var(--chart-6))"
-              />
-            </div>
-            
-            <div className="min-h-[250px]">
-              <SensorChart
-                title={`Magnetometer (${selectedIMU.toUpperCase()})`}
-                data={isConnected ? bleMagData : magnetometer}
-                unit="µT"
-                color1="hsl(var(--chart-1))"
-                color2="hsl(var(--chart-2))"
-                color3="hsl(var(--chart-3))"
-              />
-            </div>
-            
-            <div className="min-h-[250px]">
-              <SensorChart
-                title="Sensor Fusion (Quaternion)"
-                data={isConnected && bleQuatData.length > 0 ? bleQuatData.map(q => ({
-                  time: q.time,
-                  x: q.x,
-                  y: q.y,
-                  z: q.z,
-                  w: q.w
-                })) : accelerometer.map((_, i) => {
-                  const rx = rotation.x, ry = rotation.y, rz = rotation.z;
-                  const cx = Math.cos(rx / 2), sx = Math.sin(rx / 2);
-                  const cy = Math.cos(ry / 2), sy = Math.sin(ry / 2);
-                  const cz = Math.cos(rz / 2), sz = Math.sin(rz / 2);
-                  const w = cx * cy * cz + sx * sy * sz;
-                  const x = sx * cy * cz - cx * sy * sz;
-                  const y = cx * sy * cz + sx * cy * sz;
-                  const z = cx * cy * sz - sx * sy * cz;
-                  return {
-                    time: accelerometer[i]?.time || 0,
-                    x, y, z, w
-                  };
-                })}
-                unit="quat"
-                color1="hsl(var(--chart-4))"
-                color2="hsl(var(--chart-5))"
-                color3="hsl(var(--chart-6))"
-                showW={true}
-              />
-            </div>
+            {isConnected ? (
+              <>
+                <div className="min-h-[250px]">
+                  <SensorChart
+                    title={`Accelerometer (${selectedIMU.toUpperCase()})`}
+                    data={bleAccelData}
+                    unit="m/s²"
+                    color1="hsl(var(--chart-1))"
+                    color2="hsl(var(--chart-2))"
+                    color3="hsl(var(--chart-3))"
+                  />
+                </div>
+                
+                <div className="min-h-[250px]">
+                  <SensorChart
+                    title={`Gyroscope (${selectedIMU.toUpperCase()})`}
+                    data={bleGyroData}
+                    unit="rad/s"
+                    color1="hsl(var(--chart-4))"
+                    color2="hsl(var(--chart-5))"
+                    color3="hsl(var(--chart-6))"
+                  />
+                </div>
+                
+                <div className="min-h-[250px]">
+                  <SensorChart
+                    title={`Magnetometer (${selectedIMU.toUpperCase()})`}
+                    data={bleMagData}
+                    unit="µT"
+                    color1="hsl(var(--chart-1))"
+                    color2="hsl(var(--chart-2))"
+                    color3="hsl(var(--chart-3))"
+                  />
+                </div>
+                
+                <div className="min-h-[250px]">
+                  <SensorChart
+                    title="Sensor Fusion (Quaternion)"
+                    data={bleQuatData}
+                    unit="quat"
+                    color1="hsl(var(--chart-4))"
+                    color2="hsl(var(--chart-5))"
+                    color3="hsl(var(--chart-6))"
+                    showW={true}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="col-span-2 flex items-center justify-center min-h-[500px]">
+                <div className="text-center">
+                  <p className="text-muted-foreground text-lg">No device connected</p>
+                  <p className="text-muted-foreground/60 text-sm mt-2">Connect to an IMU device to view sensor data</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
