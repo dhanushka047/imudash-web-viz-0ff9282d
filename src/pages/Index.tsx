@@ -31,11 +31,17 @@ const Index = () => {
   const [bleAccelData, setBleAccelData] = useState<Array<{ time: number; x: number; y: number; z: number }>>([]);
   const [bleGyroData, setBleGyroData] = useState<Array<{ time: number; x: number; y: number; z: number }>>([]);
   const [bleMagData, setBleMagData] = useState<Array<{ time: number; x: number; y: number; z: number }>>([]);
+  const [bleQuatData, setBleQuatData] = useState<Array<{ time: number; x: number; y: number; z: number; w: number }>>([]);
   const startTimeRef = useRef<number>(Date.now());
 
   // Update BLE data when new IMU data arrives
   useEffect(() => {
     if (bleHook.latestIMUData && !isPaused && isConnected) {
+      const imuId = bleHook.latestIMUData.imuId;
+      
+      // Only update if it's the selected IMU
+      if (imuId.toString() !== selectedIMU.replace('imu', '')) return;
+      
       const currentTime = (Date.now() - startTimeRef.current) / 1000;
       const maxDataPoints = settings.samplingRate * settings.chartDuration;
       
@@ -56,8 +62,14 @@ const Index = () => {
         const newData = [...prev, { time: currentTime, ...bleHook.latestIMUData!.mag }];
         return newData.slice(-maxDataPoints);
       });
+      
+      // Update quaternion data
+      setBleQuatData(prev => {
+        const newData = [...prev, { time: currentTime, ...bleHook.latestIMUData!.quat }];
+        return newData.slice(-maxDataPoints);
+      });
     }
-  }, [bleHook.latestIMUData, isPaused, isConnected, settings.samplingRate, settings.chartDuration]);
+  }, [bleHook.latestIMUData, isPaused, isConnected, settings.samplingRate, settings.chartDuration, selectedIMU]);
 
   const handleRecord = () => {
     setIsRecording(!isRecording);
@@ -74,6 +86,7 @@ const Index = () => {
     setBleAccelData([]);
     setBleGyroData([]);
     setBleMagData([]);
+    setBleQuatData([]);
     startTimeRef.current = Date.now();
     setStatusMessage('Data cleared - All chart data has been reset');
   };
@@ -93,6 +106,7 @@ const Index = () => {
       setBleAccelData([]);
       setBleGyroData([]);
       setBleMagData([]);
+      setBleQuatData([]);
       startTimeRef.current = Date.now();
       setStatusMessage('Disconnected - IMU device disconnected');
     } else {
@@ -109,6 +123,7 @@ const Index = () => {
         setBleAccelData([]);
         setBleGyroData([]);
         setBleMagData([]);
+        setBleQuatData([]);
         startTimeRef.current = Date.now();
         setStatusMessage(`Connected to ${deviceName}`);
       }
@@ -157,9 +172,12 @@ const Index = () => {
             packetsReceived={bleHook.packetsReceived}
             dataRate={settings.samplingRate}
             lastPacketTime={new Date().toLocaleTimeString()}
+            imuId={bleHook.latestIMUData.imuId}
             latestData={{
               accel: bleHook.latestIMUData.accel,
-              gyro: bleHook.latestIMUData.gyro
+              gyro: bleHook.latestIMUData.gyro,
+              mag: bleHook.latestIMUData.mag,
+              quat: bleHook.latestIMUData.quat
             }}
           />
         </div>
@@ -213,22 +231,24 @@ const Index = () => {
             
             <div className="min-h-[250px]">
               <SensorChart
-                title="Sensor Fusion (Orientation)"
-                data={isConnected ? bleGyroData.map((g, i) => ({
-                  time: g.time,
-                  x: g.x % (2 * Math.PI),
-                  y: g.y % (2 * Math.PI),
-                  z: g.z % (2 * Math.PI)
+                title="Sensor Fusion (Quaternion)"
+                data={isConnected && bleQuatData.length > 0 ? bleQuatData.map(q => ({
+                  time: q.time,
+                  x: q.x,
+                  y: q.y,
+                  z: q.z,
+                  w: q.w
                 })) : accelerometer.map((_, i) => ({
                   time: accelerometer[i]?.time || 0,
                   x: rotation.x % (2 * Math.PI),
                   y: rotation.y % (2 * Math.PI),
                   z: rotation.z % (2 * Math.PI)
                 }))}
-                unit="rad"
+                unit="quat"
                 color1="hsl(var(--chart-4))"
                 color2="hsl(var(--chart-5))"
                 color3="hsl(var(--chart-6))"
+                showW={isConnected && bleQuatData.length > 0}
               />
             </div>
           </div>

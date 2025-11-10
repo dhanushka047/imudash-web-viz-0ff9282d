@@ -75,9 +75,11 @@ export function useBLE() {
   const [packetsReceived, setPacketsReceived] = useState(0);
   const [lastPacketHex, setLastPacketHex] = useState<string | null>(null);
   const [latestIMUData, setLatestIMUData] = useState<{
+    imuId: number;
     accel: { x: number; y: number; z: number };
     gyro: { x: number; y: number; z: number };
     mag: { x: number; y: number; z: number };
+    quat: { x: number; y: number; z: number; w: number };
   } | null>(null);
 
   const advHandlerRef = useRef<(ev: any) => void>();
@@ -212,14 +214,16 @@ const chooseDevice = useCallback(async () => {
     const decoder = new TextDecoder();
     const text = decoder.decode(dv.buffer);
     
-    // Parse CSV: 0,accel.x,accel.y,accel.z,gyro.x,gyro.y,gyro.z,mag.x,mag.y,mag.z
+    // Parse CSV: imuId,accel.x,accel.y,accel.z,gyro.x,gyro.y,gyro.z,mag.x,mag.y,mag.z,quat.x,quat.y,quat.z,quat.w
     const values = text.trim().split(',').map(v => parseFloat(v));
     
-    if (values.length >= 10) {
+    if (values.length >= 14) {
       setLatestIMUData({
+        imuId: values[0],
         accel: { x: values[1], y: values[2], z: values[3] },
         gyro: { x: values[4], y: values[5], z: values[6] },
-        mag: { x: values[7], y: values[8], z: values[9] }
+        mag: { x: values[7], y: values[8], z: values[9] },
+        quat: { x: values[10], y: values[11], z: values[12], w: values[13] }
       });
     }
     

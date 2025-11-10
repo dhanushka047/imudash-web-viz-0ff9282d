@@ -2,11 +2,12 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 interface SensorChartProps {
   title: string;
-  data: Array<{ time: number; x: number; y: number; z: number }>;
+  data: Array<{ time: number; x: number; y: number; z: number; w?: number }>;
   unit: string;
   color1?: string;
   color2?: string;
   color3?: string;
+  showW?: boolean;
 }
 
 export const SensorChart = ({ 
@@ -15,7 +16,8 @@ export const SensorChart = ({
   unit,
   color1 = "hsl(var(--chart-1))",
   color2 = "hsl(var(--chart-2))",
-  color3 = "hsl(var(--chart-3))"
+  color3 = "hsl(var(--chart-3))",
+  showW = false
 }: SensorChartProps) => {
   return (
     <div className="bg-card rounded-lg border border-border p-4 h-full flex flex-col">
@@ -67,6 +69,16 @@ export const SensorChart = ({
               dot={false}
               name="Z"
             />
+            {showW && (
+              <Line 
+                type="monotone" 
+                dataKey="w" 
+                stroke="hsl(var(--chart-7))"
+                strokeWidth={2}
+                dot={false}
+                name="W"
+              />
+            )}
           </LineChart>
         </ResponsiveContainer>
       </div>
