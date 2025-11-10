@@ -46,6 +46,14 @@ export type SeenDevice = {
   device?: BluetoothDevice;
 };
 
+export type IMUSample = {
+  imuId: number;
+  accel: { x: number; y: number; z: number };
+  gyro: { x: number; y: number; z: number };
+  mag: { x: number; y: number; z: number };
+  quat: { x: number; y: number; z: number; w: number };
+};
+
 export const TARGET_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 export const TARGET_CHAR_NOTIFY_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
@@ -58,16 +66,15 @@ export function useBLE() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
   const [connectedDevice, setConnectedDevice] = useState<BluetoothDevice | null>(null);
+
   const [validUUIDFound, setValidUUIDFound] = useState(false);
   const [packetsReceived, setPacketsReceived] = useState(0);
   const [lastPacketHex, setLastPacketHex] = useState<string | null>(null);
-  const [latestIMUData, setLatestIMUData] = useState<{
-    imuId: number;
-    accel: { x: number; y: number; z: number };
-    gyro: { x: number; y: number; z: number };
-    mag: { x: number; y: number; z: number };
-    quat: { x: number; y: number; z: number; w: number };
-  } | null>(null);
+
+  // latest sample for *any* IMU (last one in last packet)
+  const [latestIMUData, setLatestIMUData] = useState<IMUSample | null>(null);
+  // latest samples per IMU id (0..5)
+  const [latestByIMU, setLatestByIMU] = useState<Record<number, IMUSample>>({});
 
   const advHandlerRef = useRef<(ev: any) => void>();
   const leScanRef = useRef<BluetoothLEScan | null>(null);
@@ -112,10 +119,10 @@ export function useBLE() {
 
       const onAdv = (event: any) => {
         try {
-          const id = event?.device?.id ?? crypto.randomUUID();
-          const name = event?.device?.name ?? "Unknown";
-          const rssi = event?.rssi;
-          const txPower = event?.txPower;
+          const id: string = event?.device?.id ?? crypto.randomUUID();
+          const name: string = event?.device?.name ?? "Unknown";
+          const rssi: number | undefined = event?.rssi;
+          const txPower: number | undefined = event?.txPower;
           addOrUpdate({ id, name, rssi, txPower, lastSeen: Date.now(), device: event?.device });
         } catch {}
       };
@@ -161,22 +168,51 @@ export function useBLE() {
     }
   }, [addOrUpdate]);
 
+  // Notification handler: can contain multiple IMUs: [id0,ax0,...,w0, id1,ax1,...,w1, ...]
   const onNotify = (ev: Event) => {
     const ch = ev.target as BluetoothRemoteGATTCharacteristic;
     const dv = ch?.value;
     if (!dv) return;
+
     const decoder = new TextDecoder();
     const text = decoder.decode(dv.buffer.slice(dv.byteOffset, dv.byteOffset + dv.byteLength));
-    const values = text.trim().split(",").map((v) => parseFloat(v));
-    if (values.length >= 14 && !values.some((v) => Number.isNaN(v))) {
-      setLatestIMUData({
-        imuId: values[0],
-        accel: { x: values[1], y: values[2], z: values[3] },
-        gyro: { x: values[4], y: values[5], z: values[6] },
-        mag: { x: values[7], y: values[8], z: values[9] },
-        quat: { x: values[10], y: values[11], z: values[12], w: values[13] },
+    const values = text
+      .trim()
+      .split(",")
+      .map((v) => parseFloat(v));
+
+    const samples: IMUSample[] = [];
+
+    const GROUP = 14; // id + 13 values
+    for (let i = 0; i + GROUP - 1 < values.length; i += GROUP) {
+      const imuId = values[i];
+      if (Number.isNaN(imuId)) continue;
+      samples.push({
+        imuId,
+        accel: { x: values[i + 1], y: values[i + 2], z: values[i + 3] },
+        gyro: { x: values[i + 4], y: values[i + 5], z: values[i + 6] },
+        mag: { x: values[i + 7], y: values[i + 8], z: values[i + 9] },
+        quat: {
+          x: values[i + 10],
+          y: values[i + 11],
+          z: values[i + 12],
+          w: values[i + 13],
+        },
       });
     }
+
+    if (samples.length > 0) {
+      const lastSample = samples[samples.length - 1];
+      setLatestIMUData(lastSample);
+      setLatestByIMU((prev) => {
+        const next = { ...prev };
+        for (const s of samples) {
+          next[s.imuId] = s;
+        }
+        return next;
+      });
+    }
+
     const bytes = Array.from(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
     const hex = bytes.map((b) => b.toString(16).padStart(2, "0")).join(" ");
     setLastPacketHex(hex);
@@ -202,15 +238,24 @@ export function useBLE() {
       setPacketsReceived(0);
       setLastPacketHex(null);
       setValidUUIDFound(false);
+      setLatestIMUData(null);
+      setLatestByIMU({});
+
       try {
         const server = await device.gatt?.connect();
-        if (!server) return false;
+        if (!server) {
+          setConnectMessage("Failed to connect");
+          return false;
+        }
         setConnectedDevice(device);
+
         const service = await server.getPrimaryService(TARGET_SERVICE_UUID);
         const notifyChar = await service.getCharacteristic(TARGET_CHAR_NOTIFY_UUID);
+
         await notifyChar.startNotifications();
         notifyChar.addEventListener("characteristicvaluechanged", onNotify);
         notifyCharRef.current = notifyChar;
+
         setValidUUIDFound(true);
         setConnectMessage("Receiving notifications…");
         return true;
@@ -249,6 +294,8 @@ export function useBLE() {
     packetsReceived,
     lastPacketHex,
     latestIMUData,
+    latestByIMU,          // 👈 per-IMU latest samples
+
     startScan,
     stopScan,
     chooseDevice,

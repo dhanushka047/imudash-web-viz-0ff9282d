@@ -1,14 +1,5 @@
-// components/Header.tsx
 import { Button } from "@/components/ui/button";
-import {
-  Circle,
-  Download,
-  Radio,
-  Pause,
-  Play,
-  Trash2,
-  Settings,
-} from "lucide-react";
+import { Circle, Download, Radio, Pause, Play, Trash2, Settings } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   Select,
@@ -54,7 +45,6 @@ export const Header = ({
           </div>
           <h1 className="text-xl font-bold text-foreground">IMU Monitor</h1>
 
-          {/* Values are imu0..imu5 to match firmware IDs 0..5 */}
           <Select value={selectedIMU} onValueChange={onIMUChange}>
             <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="Select IMU" />
@@ -77,9 +67,7 @@ export const Header = ({
             onClick={onRecord}
             className="gap-2"
           >
-            <Circle
-              className={`w-4 h-4 ${isRecording ? "fill-current" : ""}`}
-            />
+            <Circle className={`w-4 h-4 ${isRecording ? "fill-current" : ""}`} />
             {isRecording ? "Stop" : "Record"}
           </Button>
 
@@ -89,40 +77,21 @@ export const Header = ({
             onClick={onPause}
             className="gap-2"
           >
-            {isPaused ? (
-              <Play className="w-4 h-4" />
-            ) : (
-              <Pause className="w-4 h-4" />
-            )}
+            {isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
             {isPaused ? "Resume" : "Pause"}
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClear}
-            className="gap-2"
-          >
+          <Button variant="outline" size="sm" onClick={onClear} className="gap-2">
             <Trash2 className="w-4 h-4" />
             Clear
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExport}
-            className="gap-2"
-          >
+          <Button variant="outline" size="sm" onClick={onExport} className="gap-2">
             <Download className="w-4 h-4" />
             Export
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSettings}
-            className="gap-2"
-          >
+          <Button variant="outline" size="sm" onClick={onSettings} className="gap-2">
             <Settings className="w-4 h-4" />
             Settings
           </Button>

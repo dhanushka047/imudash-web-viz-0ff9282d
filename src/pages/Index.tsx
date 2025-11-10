@@ -1,4 +1,3 @@
-// pages/index.tsx
 import { useState, useEffect, useRef } from "react";
 import { Header } from "@/components/Header";
 import { StatusBar } from "@/components/StatusBar";
@@ -16,9 +15,7 @@ export default function Index() {
   const [isPaused, setIsPaused] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bleDialogOpen, setBleDialogOpen] = useState(false);
-
-  // default IMU is firmware ID 0 => "imu0"
-  const [selectedIMU, setSelectedIMU] = useState("imu0");
+  const [selectedIMU, setSelectedIMU] = useState("imu0"); // imu0 -> id 0
   const [statusMessage, setStatusMessage] = useState("");
 
   const [settings, setSettings] = useState({
@@ -37,13 +34,12 @@ export default function Index() {
   const [bleQuatData, setBleQuatData] = useState<any[]>([]);
   const startTimeRef = useRef(Date.now());
 
-  // update charts with packets for the selected IMU only
-  useEffect(() => {
-    const imu = bleHook.latestIMUData;
-    if (!imu || !isConnected || isPaused) return;
+  const selectedImuId = parseInt(selectedIMU.replace("imu", ""), 10) || 0;
 
-    const currentImuKey = `imu${imu.imuId}`; // imuId 0..5 -> "imu0".. "imu5"
-    if (currentImuKey !== selectedIMU) return;
+  // push data only for currently selected IMU
+  useEffect(() => {
+    const imu = bleHook.latestByIMU[selectedImuId];
+    if (!imu || !isConnected || isPaused) return;
 
     const currentTime = (Date.now() - startTimeRef.current) / 1000;
     const maxPoints = settings.samplingRate * settings.chartDuration;
@@ -60,7 +56,7 @@ export default function Index() {
     setBleQuatData((prev) =>
       [...prev, { time: currentTime, ...imu.quat }].slice(-maxPoints)
     );
-  }, [bleHook.latestIMUData, isConnected, isPaused, selectedIMU, settings]);
+  }, [bleHook.latestByIMU, selectedImuId, isConnected, isPaused, settings]);
 
   const handleBLEConnect = (deviceName: string) => {
     setIsConnected(true);
@@ -83,13 +79,23 @@ export default function Index() {
   };
 
   const handleIMUChange = (imu: string) => {
+    const id = parseInt(imu.replace("imu", ""), 10) || 0;
     setSelectedIMU(imu);
-    setStatusMessage(`IMU Changed - Switched to ${imu.toUpperCase()}`);
     startTimeRef.current = Date.now();
     setBleAccelData([]);
     setBleGyroData([]);
     setBleMagData([]);
     setBleQuatData([]);
+    setStatusMessage(`IMU Changed - Switched to IMU ${id + 1}`);
+
+    // if connected and there is already some data, but none for this ID -> popup
+    if (
+      isConnected &&
+      Object.keys(bleHook.latestByIMU).length > 0 &&
+      !bleHook.latestByIMU[id]
+    ) {
+      window.alert("No data found for this IMU yet.");
+    }
   };
 
   const handleClear = () => {
@@ -102,11 +108,7 @@ export default function Index() {
     setStatusMessage("Data cleared - All chart data has been reset");
   };
 
-  const selectedLatestIMU =
-    bleHook.latestIMUData &&
-    `imu${bleHook.latestIMUData.imuId}` === selectedIMU
-      ? bleHook.latestIMUData
-      : null;
+  const selectedLatestIMU = bleHook.latestByIMU[selectedImuId] || null;
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -203,7 +205,7 @@ export default function Index() {
               <>
                 <div className="min-h-[250px]">
                   <SensorChart
-                    title={`Accelerometer (${selectedIMU.toUpperCase()})`}
+                    title={`Accelerometer (IMU ${selectedImuId + 1})`}
                     data={bleAccelData}
                     unit="m/s²"
                   />
@@ -211,7 +213,7 @@ export default function Index() {
 
                 <div className="min-h-[250px]">
                   <SensorChart
-                    title={`Gyroscope (${selectedIMU.toUpperCase()})`}
+                    title={`Gyroscope (IMU ${selectedImuId + 1})`}
                     data={bleGyroData}
                     unit="rad/s"
                   />
@@ -219,7 +221,7 @@ export default function Index() {
 
                 <div className="min-h-[250px]">
                   <SensorChart
-                    title={`Magnetometer (${selectedIMU.toUpperCase()})`}
+                    title={`Magnetometer (IMU ${selectedImuId + 1})`}
                     data={bleMagData}
                     unit="µT"
                   />
