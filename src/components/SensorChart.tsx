@@ -73,7 +73,7 @@ export const SensorChart = ({
               <Line 
                 type="monotone" 
                 dataKey="w" 
-                stroke="hsl(var(--chart-7))"
+                stroke="hsl(var(--accent))"
                 strokeWidth={2}
                 dot={false}
                 name="W"

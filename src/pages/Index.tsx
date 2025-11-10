@@ -166,7 +166,7 @@ const Index = () => {
         onConnect={handleBLEConnect}
       />
       
-      {isConnected && bleHook.latestIMUData && (
+      {isConnected && bleHook.latestIMUData && (bleHook.latestIMUData.imuId.toString() === selectedIMU.replace('imu','')) && (
         <div className="px-6 pt-4">
           <DataPacketStatus
             packetsReceived={bleHook.packetsReceived}
@@ -238,17 +238,25 @@ const Index = () => {
                   y: q.y,
                   z: q.z,
                   w: q.w
-                })) : accelerometer.map((_, i) => ({
-                  time: accelerometer[i]?.time || 0,
-                  x: rotation.x % (2 * Math.PI),
-                  y: rotation.y % (2 * Math.PI),
-                  z: rotation.z % (2 * Math.PI)
-                }))}
+                })) : accelerometer.map((_, i) => {
+                  const rx = rotation.x, ry = rotation.y, rz = rotation.z;
+                  const cx = Math.cos(rx / 2), sx = Math.sin(rx / 2);
+                  const cy = Math.cos(ry / 2), sy = Math.sin(ry / 2);
+                  const cz = Math.cos(rz / 2), sz = Math.sin(rz / 2);
+                  const w = cx * cy * cz + sx * sy * sz;
+                  const x = sx * cy * cz - cx * sy * sz;
+                  const y = cx * sy * cz + sx * cy * sz;
+                  const z = cx * cy * sz - sx * sy * cz;
+                  return {
+                    time: accelerometer[i]?.time || 0,
+                    x, y, z, w
+                  };
+                })}
                 unit="quat"
                 color1="hsl(var(--chart-4))"
                 color2="hsl(var(--chart-5))"
                 color3="hsl(var(--chart-6))"
-                showW={isConnected && bleQuatData.length > 0}
+                showW={true}
               />
             </div>
           </div>
