@@ -155,7 +155,7 @@ export function useBLE() {
     }
     try {
       const device = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ namePrefix: "S" }],
+        filters: [{ namePrefix: "W" }],
         optionalServices: [TARGET_SERVICE_UUID],
       });
       if (!device) return null;
