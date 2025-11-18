@@ -219,6 +219,9 @@ export function useBLE() {
     setPacketsReceived((prev) => prev + 1);
   };
 
+
+  
+
   const disconnect = useCallback(() => {
     try {
       notifyCharRef.current?.removeEventListener("characteristicvaluechanged", onNotify);
